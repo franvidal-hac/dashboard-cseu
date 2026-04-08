@@ -4,81 +4,98 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Proyecto
 
-Dashboard interactivo en **R Shiny** para el sistema CSEU (Calidad de Servicio y Experiencia Usuaria) de DIPRES, orientado a las autoridades del Ministerio de Hacienda. Permite evaluar el desempeño de instituciones públicas en reclamos, transparencia (SAIP), trámites y metas de proyectos de inversión, con análisis 2022–2025 y vista evolutiva.
+Dashboard interactivo en **Streamlit (Python)** para el sistema CSEU (Calidad de Servicio y Experiencia Usuaria), Secretaría de Modernización, Ministerio de Hacienda. Permite evaluar el desempeño de 145 instituciones públicas en reclamos, transparencia (SAIP) y trámites, con análisis 2022–2025 y vista evolutiva.
 
-## Cómo ejecutar
+**URL producción:** https://dashboard-cseu.streamlit.app/
+**Repositorio:** https://github.com/franvidal-hac/dashboard-cseu
 
-```r
-# Desde R o RStudio, estando en el directorio del proyecto:
-shiny::runApp("app.R")
+## Cómo ejecutar localmente
 
-# O directamente desde la terminal:
-Rscript -e "shiny::runApp('app.R')"
+```bash
+cd "/Users/fran/Desktop/Dashboard Sistema CSEU"
+python3 -m streamlit run streamlit_app.py
 ```
 
-El dashboard se despliega en ShinyApps.io (ver carpeta `rsconnect/`).
+## Cómo publicar cambios
 
-```r
-# Para desplegar:
-rsconnect::deployApp()
+```bash
+git add streamlit_app.py
+git commit -m "descripción del cambio"
+git push https://franvidal-hac:TOKEN@github.com/franvidal-hac/dashboard-cseu.git main
 ```
+
+Streamlit Community Cloud detecta el push y actualiza la app automáticamente en ~2 minutos. El TOKEN es un Personal Access Token (classic) con scope `repo`, generado en GitHub → Settings → Developer settings → Personal access tokens.
 
 ## Estructura de archivos
 
 ```
 Dashboard Sistema CSEU/
-├── app.R                                      # App completa (UI + Server en un solo archivo)
-├── Reporte consolidado CSEU 2024.xlsx         # Datos principales 2024 (skip=4, sin nombres de columna)
-├── Reporte consolidado_SistemaCSEU2025.xlsx   # Datos principales 2025 (skip=6)
-├── rsconnect/                                 # Config de despliegue ShinyApps.io
-└── Información Sistema/                       # Datos desagregados por módulo
-    ├── Categorización Sistema CSEU 2025 1.xlsx        # Maestro de instituciones y categoría funcional
-    ├── reclamos_consolidado_2025.xlsx                  # Reclamos 2022–2025 por institución
-    ├── saip_consolidado_2025.xlsx                      # SAIP (transparencia) 2022–2025
-    ├── tramites_consolidado_2025.xlsx                  # Trámites relevantes 2022–2025
-    └── indicadores-proyectos-inversion-2025.xlsx       # Metas de trámites de autorización de inversión
+├── streamlit_app.py                               # App principal (único archivo Python)
+├── requirements.txt                               # Dependencias Python
+├── CLAUDE.md                                      # Este archivo
+├── app.R                                          # Dashboard anterior en R Shiny (no tocar)
+├── Reporte consolidado CSEU 2024.xlsx             # Datos principales 2024 (no usados en Streamlit)
+├── Reporte consolidado_SistemaCSEU2025.xlsx       # Datos principales 2025 (no usados en Streamlit)
+└── Información Sistema/                           # Fuentes de datos del dashboard Streamlit
+    ├── Categorización Sistema CSEU 2025 1.xlsx    # Maestro de instituciones
+    ├── reclamos_consolidado_2025.xlsx             # Reclamos 2022–2025
+    ├── saip_consolidado_2025.xlsx                 # SAIP (transparencia) 2022–2025
+    ├── tramites_consolidado_2025.xlsx             # Trámites 2022–2025
+    └── indicadores-proyectos-inversion-2025.xlsx  # Metas de trámites de inversión (aún no integrado)
 ```
 
 ## Arquitectura de datos
 
-**ID de unión principal:** `codigo_interno_SCSEU` (equivalente a `cod_servicio` en los reportes consolidados). Todas las fuentes se pueden unir por este código.
+**ID de unión:** `codigo_interno_SCSEU` (= `cod` tras renombrar en carga).
 
-**Fuentes de datos:**
+**Instituciones incluidas:** 145 — solo etapas válidas (`Etapa 1`, `Etapa 2`, `Etapa 3`). Se excluyen los 21 servicios en etapa `SAIP` y 2 filas basura del Excel maestro.
 
-| Archivo | Contenido | Cobertura |
+**Columnas clave tras carga:**
+
+| Prefijo | Módulo | Métricas por año (2022–2025) |
 |---|---|---|
-| `Reporte consolidado*.xlsx` | Resumen agregado por institución: reclamos, SAIP, trámites, satisfacción (MESU), plan de actividades | 2024 y 2025 |
-| `reclamos_consolidado_2025.xlsx` | Serie anual: n° recibidos, respondidos, tiempos (promedio/mediana/min/max), plazo >20 días hábiles, metas | 2022–2025 |
-| `saip_consolidado_2025.xlsx` | Serie anual: n° recibidas, respondidas, tiempos, % por tramo (≤10, ≤15, ≤20, >20 días hábiles), metas | 2022–2025 |
-| `tramites_consolidado_2025.xlsx` | Por trámite: tiempo esperado, promedio/mediana/min/max, n° transacciones, % fuera de plazo | 2022–2025 |
-| `indicadores-proyectos-inversion-2025.xlsx` | Metas de 3 indicadores por trámite de autorización de inversión | 2025 |
-| `Categorización*.xlsx` | Maestro de 169 instituciones: ministerio, etapa, si aplica MESU, categoría funcional | 2025 |
+| `rec_*` | Reclamos | `rec_n` (recibidos), `rec_resp` (respondidos), `rec_pct` (% respondidos), `rec_prom` (días promedio), `rec_fp_n` / `rec_fp_pct` (respondidos >20 días hábiles) |
+| `saip_*` | SAIP | mismo esquema que reclamos (`saip_n`, `saip_resp`, `saip_pct`, `saip_prom`, `saip_fp_n`, `saip_fp_pct`) |
+| `tram_*` | Trámites | `tram_pct` (% en plazo, promedio simple por trámite), `tram_n` (total transacciones) |
 
-**Porcentajes en Excel:** los archivos de reportes consolidados almacenan porcentajes como decimales (0.87 = 87%). La función `norm_pct()` normaliza esto automáticamente. Los archivos de `Información Sistema/` almacenan porcentajes ya en escala 0–100.
+**Umbrales mínimos de datos para incluir una institución:**
+- Reclamos / SAIP: ≥ 11 casos recibidos en el año
+- Trámites: ≥ 51 transacciones totales en el año
 
-## Arquitectura de app.R
+## Decisiones metodológicas importantes
 
-El archivo sigue esta secuencia:
+- **% en plazo de trámites:** promedio simple del % en plazo de cada trámite reportado por la institución. Cada trámite pesa igual, independiente de su volumen de transacciones. El plazo esperado lo define cada institución, por lo que no es directamente comparable entre ellas.
+- **% fuera de plazo (reclamos/SAIP):** promedio simple entre instituciones (cada institución pesa igual, sin ponderar por volumen).
+- **Sin score compuesto:** los tres módulos (reclamos, SAIP, trámites) se muestran siempre como columnas separadas. No se agrega en un único número.
+- **Tiempos (días promedio):** menor = mejor. Umbrales semáforo: ≤5d verde, ≤15d naranja, >15d rojo.
+- **Porcentajes (% respondidos, % en plazo):** mayor = mejor. Umbrales: ≥90% verde, ≥70% naranja, <70% rojo.
 
-1. **Helpers** (`safe_num`, `norm_pct`, `fmt_pct`, `fmt_num`, `norm_nombre`) — funciones de limpieza y formato usadas en todo el código.
-2. **Carga de datos** — lee los dos reportes consolidados (2024 y 2025), asigna nombres de columna manualmente (los archivos Excel no tienen cabeceras usables), normaliza tipos.
-3. **Clasificación de instituciones** — separa entre instituciones presentes en ambos años (para comparación evolutiva) vs. solo en 2025 (instituciones nuevas). El join entre años se hace por **nombre normalizado** (`join_key`) porque los códigos cambian. Hay una tabla de equivalencias `equiv_2024` para instituciones que cambiaron de nombre entre años.
-4. **Paleta de colores y funciones de gráficos** — `plot_reclamos()`, `plot_saip()`, `plot_sat_canal()`, `plot_atributos()`, etc. Todos retornan objetos `plotly`.
-5. **UI** — definida con `bslib::page_navbar()`, organizada en pestañas por módulo.
-6. **Server** — reactivos filtrados por institución seleccionada; cada módulo (reclamos, SAIP, trámites, satisfacción, inversión) tiene su propia sección en el server.
+## Arquitectura de streamlit_app.py
 
-## Convenciones clave
+```
+1. Configuración de página y CSS global
+2. Constantes: YEARS, MODULOS (dict con 5 campos por módulo)
+3. Funciones auxiliares: sem_color, sem_emoji, fmt, bg_color, bg_fp, bg_dias
+4. load_data() — @st.cache_data
+   ├── Lee 4 archivos Excel de Información Sistema/
+   ├── Calcula métricas derivadas (% fp, % en plazo por trámite)
+   ├── Agrega trámites por institución (promedio simple)
+   ├── Join maestro → master DataFrame (145 filas)
+   └── Filtra etapas inválidas
+5. Sidebar: filtros de ministerio y categoría funcional → df (subconjunto de master)
+6. Tabs:
+   ├── Tab 1: Resumen Ejecutivo — KPIs por módulo, distribuciones, por categoría
+   ├── Tab 2: Ranking — bar chart + tabla ordenables por cualquier módulo/métrica
+   ├── Tab 3: Evolución Temporal — volumen, tiempos, fuera de plazo, scatterplots 2022→2025
+   └── Tab 4: Por Categoría — heatmap, ranking dentro de categoría, por ministerio
+```
 
-- **Colores semáforo:** `col_ok` (#1e8449 verde) ≥75%, `col_warn` (#d35400 naranja) ≥50%, `col_bad` (#c0392b rojo) <50%. Aplicar con `bar_color(pct)`.
-- **Valores faltantes:** mostrar como `"N/D"` usando `fmt_pct()` / `fmt_num()`.
-- **Institución "nueva en 2025":** listada en `nuevas_2025`; no tiene datos 2024 para comparación, mostrar solo la vista 2025.
-- **Módulo MESU (satisfacción):** solo aplica a instituciones donde `mesu_aplica == "Sí"` en los datos consolidados.
-- **Indicadores de inversión:** solo aplican a instituciones y trámites presentes en `indicadores-proyectos-inversion-2025.xlsx`.
+**MODULOS dict:** cada entrada es `(col, n_col, n_min, lower_is_better, suffix)`. Se usa en Ranking (Tab 2) y Por Categoría (Tab 4) para determinar ordenamiento, colores y formato de ejes.
 
-## Nuevas funcionalidades planificadas
+**Filtros globales:** `df` es el DataFrame filtrado por sidebar. Todos los tabs usan `df` excepto los selectores del sidebar (que usan `master` para listar todas las opciones).
 
-El proyecto está en fase inicial de expansión. Los objetivos son:
+## Pendiente / próximas mejoras
 
-1. **Análisis comparativo entre instituciones** — ranking y benchmarking por categoría funcional y ministerio.
-2. **Vista evolutiva 2022–2025** usando los archivos desagregados de `Información Sistema/`.
-3. **Dashboard para autoridades** — presentación ejecutiva con foco en "quién lo hace mejor" y "mayores oportunidades de mejora".
+- Integrar `indicadores-proyectos-inversion-2025.xlsx` (metas de trámites de autorización de proyectos de inversión)
+- Vista de ficha individual por institución
+- Exportar tabla a Excel desde el dashboard
