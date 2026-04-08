@@ -21,6 +21,15 @@ st.markdown("""
 <style>
 [data-testid="stMetricValue"] { font-size: 1.6rem; }
 .block-container { padding-top: 1.5rem; }
+[data-testid="stTabs"] { margin-top: 0.5rem; }
+.stTabs [data-baseweb="tab-list"] {
+    position: sticky;
+    top: 3rem;
+    background-color: white;
+    z-index: 99;
+    padding-top: 0.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
 </style>
 """, unsafe_allow_html=True)
 
