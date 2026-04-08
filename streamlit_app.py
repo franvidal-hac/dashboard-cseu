@@ -313,10 +313,11 @@ with tab1:
             marker_color=colores,
             text=conteo["n"], textposition="outside",
         ))
+        y_max = conteo["n"].max()
         fig.update_layout(
             title=titulo, height=height,
             margin=dict(t=35, b=20, l=20, r=20),
-            yaxis=dict(title="N° instituciones"),
+            yaxis=dict(title="N° instituciones", range=[0, y_max * 1.2]),
             xaxis=dict(title=""),
             showlegend=False,
         )
