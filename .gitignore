@@ -1,0 +1,8 @@
+rsconnect/
+__pycache__/
+*.pyc
+.DS_Store
+~$*.xlsx
+*.Rhistory
+.Rproj.user/
+.claude/
