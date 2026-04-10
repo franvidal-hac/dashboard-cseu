@@ -51,16 +51,16 @@ MODULOS = {
     "📄 SAIP — % respondidas":         ("saip_pct_2025",   "saip_n_2025",  0, False, "%"),
     "📄 SAIP — días promedio":          ("saip_prom_2025",  "saip_n_2025",  0, True,  "d"),
     "📄 SAIP — % >20 días":            ("saip_fp_pct_2025","saip_n_2025",  0, True,  "%"),
-    "⏱️ Trámites fuera de plazo":      ("tram_fp_pct_2025","tram_n_2025",  50, True,  "%"),
+    "⏱️ Trámites fuera de plazo":      ("tram_fp_pct_2025","tram_n_2025",  0, True,  "%"),
 }
 
-def sem_color(v, ok=90, warn=70):
+def sem_color(v, ok=90):
     if pd.isna(v): return C_GRAY
-    return C_OK if v >= ok else (C_WARN if v >= warn else C_BAD)
+    return C_OK if v >= ok else C_BAD
 
-def sem_emoji(v, ok=90, warn=70):
+def sem_emoji(v, ok=90):
     if pd.isna(v): return "⚫"
-    return "🟢" if v >= ok else ("🟡" if v >= warn else "🔴")
+    return "🟢" if v >= ok else "🔴"
 
 def fmt(v):
     return f"{v:.1f}%" if pd.notna(v) else "N/D"
@@ -164,7 +164,7 @@ def load_data():
     # Máscara de datos suficientes por módulo (2025)
     master["tiene_rec"]  = master["rec_n_2025"].fillna(0)  > 0
     master["tiene_saip"] = master["saip_n_2025"].fillna(0) > 0
-    master["tiene_tram"] = master["tram_n_2025"].fillna(0) > 50
+    master["tiene_tram"] = master["tram_n_2025"].fillna(0) > 0
     master["n_mods"]     = master[["tiene_rec","tiene_saip","tiene_tram"]].sum(axis=1)
 
     return master, tram
@@ -176,6 +176,7 @@ master, tram_raw = load_data()
 with st.sidebar:
     st.markdown("## 🏛️ CSEU · Benchmarking")
     st.caption("Calidad de Servicio y Experiencia Usuaria  \nSecretaría de Modernización · Ministerio de Hacienda")
+    st.caption("Datos autodeclarados por servicios participantes en el Sistema CSEU 2025.")
     st.divider()
 
     ministerios = ["Todos"] + sorted(master["ministerio"].dropna().unique())
@@ -185,7 +186,12 @@ with st.sidebar:
     cat_sel = st.selectbox("Categoría funcional", categorias)
 
     st.divider()
-    st.caption("ℹ️ 2025 = enero–junio (parcial)  \nUmbral: ≥1 reclamo/SAIP · ≥51 trámites")
+    st.caption("ℹ️ 2025 = enero–junio (parcial)  \nUmbral: ≥1 reclamo/SAIP · ≥1 trámite")
+    st.caption(
+        "Los plazos de gestión de trámites son definidos por cada institución.  \n"
+        "% de trámites fuera de plazo calculado como promedio simple del % fuera de plazo "
+        "de cada trámite reportado (cada trámite pesa igual, sin ponderar por volumen de transacciones)."
+    )
 
 # ─── Filtro global ─────────────────────────────────────────
 df = master.copy()
@@ -221,9 +227,6 @@ with tab1:
         tot_resp = int(sub[resp_col].sum()) if resp_col in sub.columns else None
         pct_nac  = tot_resp / tot_n * 100 if (tot_resp and tot_n > 0) else None
         n_inst   = sub[pct_col].notna().sum()
-        buenos   = (sub[pct_col] >= 90).sum()
-        regulares= ((sub[pct_col] >= 70) & (sub[pct_col] < 90)).sum()
-        criticos = (sub[pct_col] < 70).sum()
 
         with col:
             st.markdown(f"### {label}")
@@ -231,9 +234,6 @@ with tab1:
             if pct_nac is not None:
                 st.metric("% respondidos (nacional)", f"{pct_nac:.1f}%")
             st.markdown(
-                f"🟢 **{buenos}** buenas &nbsp;·&nbsp; "
-                f"🟡 **{regulares}** regulares &nbsp;·&nbsp; "
-                f"🔴 **{criticos}** críticas  \n"
                 f"<small>({n_inst} instituciones con datos)</small>",
                 unsafe_allow_html=True,
             )
@@ -256,22 +256,16 @@ with tab1:
     kpi_fuera_plazo(col_s, "saip", "saip_fp_n_2025", "saip_fp_pct_2025", "saip_n_2025", 0)
 
     with col_t:
-        sub_t = df[df["tram_n_2025"].fillna(0) > 50]
+        sub_t = df[df["tram_n_2025"].fillna(0) > 0]
         tot_trans  = int(sub_t["tram_n_2025"].sum())
         pct_fp     = sub_t["tram_fp_pct_2025"].mean()
         n_inst_t   = sub_t["tram_fp_pct_2025"].notna().sum()
-        buenos_t   = (sub_t["tram_fp_pct_2025"] <= 5).sum()
-        regulares_t= ((sub_t["tram_fp_pct_2025"] > 5) & (sub_t["tram_fp_pct_2025"] <= 20)).sum()
-        criticos_t = (sub_t["tram_fp_pct_2025"] > 20).sum()
 
         st.markdown("### ⏱️ Trámites fuera de plazo")
         st.caption("Promedio simple del % fuera de plazo de cada trámite reportado — cada trámite pesa igual, independiente de su volumen de transacciones.")
         st.metric("Transacciones (2025)", f"{tot_trans:,.0f}")
         st.metric("% fuera de plazo (promedio)", f"{pct_fp:.1f}%" if pd.notna(pct_fp) else "N/D")
         st.markdown(
-            f"🟢 **{buenos_t}** buenas &nbsp;·&nbsp; "
-            f"🟡 **{regulares_t}** regulares &nbsp;·&nbsp; "
-            f"🔴 **{criticos_t}** críticas  \n"
             f"<small>({n_inst_t} instituciones con datos)</small>",
             unsafe_allow_html=True,
         )
@@ -285,11 +279,11 @@ with tab1:
         if invert:
             bins   = [0, 5, 10, 20, 30, 50, 100.01]
             labels = ["<5%", "5–9%", "10–19%", "20–29%", "30–49%", "≥50%"]
-            colores = [C_OK, C_OK, C_WARN, C_WARN, C_BAD, C_BAD]
+            colores = [C_OK, C_OK, C_BAD, C_BAD, C_BAD, C_BAD]
         else:
             bins   = [0, 50, 70, 80, 90, 95, 100.01]
             labels = ["<50%", "50–69%", "70–79%", "80–89%", "90–94%", "95–100%"]
-            colores = [C_BAD, C_BAD, C_WARN, C_WARN, C_OK, C_OK]
+            colores = [C_BAD, C_BAD, C_BAD, C_BAD, C_OK, C_OK]
         sub["rango"] = pd.cut(sub[data_col], bins=bins, labels=labels, right=False)
         conteo = sub["rango"].value_counts().reindex(labels, fill_value=0).reset_index()
         conteo.columns = ["rango", "n"]
@@ -298,11 +292,10 @@ with tab1:
             marker_color=colores,
             text=conteo["n"], textposition="outside",
         ))
-        y_max = conteo["n"].max()
         fig.update_layout(
             title=titulo, height=height,
             margin=dict(t=35, b=20, l=20, r=20),
-            yaxis=dict(title="N° instituciones", range=[0, y_max * 1.2]),
+            yaxis=dict(title="N° instituciones", range=[0, 90]),
             xaxis=dict(title=""),
             showlegend=False,
         )
@@ -318,7 +311,7 @@ with tab1:
                                     "📄 SAIP — % respondidas en >20 días", invert=True),
                          use_container_width=True)
     with dc3:
-        st.plotly_chart(dist_chart("tram_fp_pct_2025", "tram_n_2025", 50,
+        st.plotly_chart(dist_chart("tram_fp_pct_2025", "tram_n_2025", 0,
                                     "⏱️ Trámites — % fuera de plazo", invert=True),
                          use_container_width=True)
         st.caption("Promedio simple por institución: cada trámite pesa igual.")
@@ -332,7 +325,7 @@ with tab1:
         .agg(
             rec_prom  = ("rec_fp_pct_2025",  lambda x: x[master.loc[x.index,"rec_n_2025"].fillna(0)  > 0].mean()),
             saip_prom = ("saip_fp_pct_2025", lambda x: x[master.loc[x.index,"saip_n_2025"].fillna(0) > 0].mean()),
-            tram_prom = ("tram_fp_pct_2025", lambda x: x[master.loc[x.index,"tram_n_2025"].fillna(0) > 50].mean()),
+            tram_prom = ("tram_fp_pct_2025", lambda x: x[master.loc[x.index,"tram_n_2025"].fillna(0) > 0].mean()),
         )
         .reset_index()
         .sort_values("rec_prom", ascending=False)
@@ -342,7 +335,7 @@ with tab1:
     for col, label, color in [
         ("rec_prom",  "📋 Reclamos >20d",   C_BLUE),
         ("saip_prom", "📄 SAIP >20d",        C_GOLD),
-        ("tram_prom", "⏱️ Trámites fp",      C_BAD),
+        ("tram_prom", "⏱️ Trámites — % fuera de plazo",      C_BAD),
     ]:
         fig_cat.add_trace(go.Bar(
             x=cat_avg[col],
@@ -378,7 +371,7 @@ with tab2:
             list(MODULOS.keys()),
         )
     with ctrl2:
-        orden = st.radio("Orden", ["Mejor → Peor", "Peor → Mejor"], horizontal=True)
+        orden = st.radio("Orden", ["Mejor → Peor", "Peor → Mejor"], horizontal=True, index=1)
     with ctrl3:
         n_max = max(1, len(df))
         n_show = st.number_input("Mostrar", min_value=1,
@@ -399,31 +392,31 @@ with tab2:
         + ("  \n⚠️ Para tiempos: **menor = mejor**." if lower_better else "")
     )
 
-    # Colores: para tiempos (≤5d verde, ≤15d naranja), fp_pct (≤5% verde, ≤20% naranja), % respondidos (≥90% verde)
+    # Colores: para tiempos (≤20d verde, >20d rojo), fp_pct (≤5% verde, ≤20% naranja), % respondidos (≥90% verde)
     if lower_better and suffix == "d":
         bar_colors = [
-            C_GRAY if pd.isna(v) else C_OK if v <= 5 else C_WARN if v <= 15 else C_BAD
+            C_GRAY if pd.isna(v) else C_OK if v <= 20 else C_BAD
             for v in df_rank[val_col]
         ]
         fmt_val = lambda v: f"{v:.1f}d" if pd.notna(v) else "N/D"
         x_range = [0, df_rank[val_col].max() * 1.2 if len(df_rank) > 0 else 30]
         x_title = "Días hábiles promedio"
-        vlines   = []
+        vlines   = [(20, C_BAD, "20d")]
     elif lower_better and suffix == "%":
         bar_colors = [
-            C_GRAY if pd.isna(v) else C_OK if v <= 5 else C_WARN if v <= 20 else C_BAD
+            C_GRAY if pd.isna(v) else C_OK if v <= 10 else C_BAD
             for v in df_rank[val_col]
         ]
         fmt_val = fmt
         x_range = [0, min(100, (df_rank[val_col].max() * 1.2 if len(df_rank) > 0 else 50))]
         x_title = modulo_sel
-        vlines   = [(5, C_OK, "5%"), (20, C_WARN, "20%")]
+        vlines   = [(10, C_BAD, "10%")]
     else:
         bar_colors = [sem_color(v) for v in df_rank[val_col]]
         fmt_val = fmt
         x_range = [0, 118]
         x_title = modulo_sel
-        vlines   = [(90, C_OK, "90%"), (70, C_WARN, "70%")]
+        vlines   = [(90, C_OK, "90%")]
 
     fig_rank = go.Figure(go.Bar(
         x=df_rank[val_col],
@@ -463,7 +456,7 @@ with tab2:
             ["nombre", "ministerio", "categoria",
              "rec_pct_2025", "rec_prom_2025", "rec_fp_pct_2025", "rec_n_2025",
              "saip_pct_2025", "saip_prom_2025", "saip_fp_pct_2025", "saip_n_2025",
-             "tram_pct_2025", "tram_n_2025"]
+             "tram_fp_pct_2025", "tram_n_2025"]
         ].copy()
 
         df_tabla = df_tabla.sort_values(val_col, ascending=sort_asc)
@@ -480,12 +473,12 @@ with tab2:
             "saip_prom_2025":    "📄 Días prom.",
             "saip_fp_pct_2025":  "📄 >20d %",
             "saip_n_2025":       "N SAIP",
-            "tram_pct_2025":     "⏱️ Trámites %",
+            "tram_fp_pct_2025":  "⏱️ Trámites % fuera de plazo",
             "tram_n_2025":       "N trans.",
         })
 
-        pct_cols  = ["📋 Resp. %", "📄 Resp. %", "⏱️ Trámites %"]
-        fp_cols   = ["📋 >20d %", "📄 >20d %"]
+        pct_cols  = ["📋 Resp. %", "📄 Resp. %"]
+        fp_cols   = ["📋 >20d %", "📄 >20d %", "⏱️ Trámites % fuera de plazo"]
         dias_cols = ["📋 Días prom.", "📄 Días prom."]
         int_cols  = ["N rec.", "N SAIP", "N trans."]
 
@@ -544,6 +537,7 @@ with tab3:
         ))
         fig.update_layout(
             title=title, barmode="group", height=320,
+            xaxis=dict(tickmode="array", tickvals=YEARS, ticktext=YEARS),
             yaxis2=dict(overlaying="y", side="right", ticksuffix="%",
                         range=[70, 105], showgrid=False),
             legend=dict(orientation="h", y=-0.28),
@@ -587,6 +581,7 @@ with tab3:
         ))
         fig.update_layout(
             title=title, height=300,
+            xaxis=dict(tickmode="array", tickvals=YEARS, ticktext=YEARS),
             yaxis=dict(title="Días hábiles", rangemode="tozero"),
             margin=dict(t=40, b=30, r=20),
             showlegend=False,
@@ -631,9 +626,9 @@ with tab3:
 
     # ── Sección 3: Fuera de plazo >20 días hábiles ────────
     st.divider()
-    st.subheader("Respondidos fuera de plazo (>20 días hábiles)")
+    st.subheader("Fuera de plazo")
 
-    def evol_fp(fp_pct_col, n_col, n_min, title):
+    def evol_fp(fp_pct_col, n_col, n_min, title, y_max=None):
         """Línea de % promedio fuera de plazo por año."""
         rows = []
         for yr in YEARS:
@@ -651,9 +646,15 @@ with tab3:
             text=[f"{v:.1f}%" if pd.notna(v) else "" for v in dfev["pct_prom"]],
             textposition="top center",
         ))
+        yaxis_cfg = dict(title="% fuera de plazo (promedio)", ticksuffix="%")
+        if y_max is not None:
+            yaxis_cfg["range"] = [0, y_max]
+        else:
+            yaxis_cfg["rangemode"] = "tozero"
         fig.update_layout(
             title=title, height=300,
-            yaxis=dict(title="% fuera de plazo (promedio)", ticksuffix="%", rangemode="tozero"),
+            xaxis=dict(tickmode="array", tickvals=YEARS, ticktext=YEARS),
+            yaxis=yaxis_cfg,
             showlegend=False,
             margin=dict(t=40, b=30, r=20),
         )
@@ -664,20 +665,41 @@ with tab3:
         "cada institución pesa igual independiente de su volumen. "
         "Solo se incluyen instituciones con datos suficientes en cada año."
     )
-    col_rfp, col_sfp = st.columns(2)
+    # Eje Y compartido: máximo entre los 3 módulos
+    def _fp_vals(fp_pct_col, n_col, n_min):
+        vals = []
+        for yr in YEARS:
+            sub = df[df[f"{n_col}_{yr}"].fillna(0) > n_min]
+            v = sub[f"{fp_pct_col}_{yr}"].mean()
+            if pd.notna(v):
+                vals.append(v)
+        return vals
+
+    fp_all = (
+        _fp_vals("rec_fp_pct", "rec_n", 10) +
+        _fp_vals("saip_fp_pct", "saip_n", 10) +
+        _fp_vals("tram_fp_pct", "tram_n", 0)
+    )
+    fp_y_max = max(fp_all) * 1.25 if fp_all else 50
+
+    col_rfp, col_sfp, col_tfp = st.columns(3)
     with col_rfp:
         st.plotly_chart(
-            evol_fp("rec_fp_pct", "rec_n", 10, "📋 Reclamos — % respondidos >20 días hábiles"),
+            evol_fp("rec_fp_pct", "rec_n", 10, "📋 Reclamos — % respondidos >20 días hábiles", fp_y_max),
             use_container_width=True)
     with col_sfp:
         st.plotly_chart(
-            evol_fp("saip_fp_pct", "saip_n", 10, "📄 SAIP — % respondidas >20 días hábiles"),
+            evol_fp("saip_fp_pct", "saip_n", 10, "📄 SAIP — % respondidas >20 días hábiles", fp_y_max),
+            use_container_width=True)
+    with col_tfp:
+        st.plotly_chart(
+            evol_fp("tram_fp_pct", "tram_n", 0, "⏱️ Trámites — % fuera de plazo", fp_y_max),
             use_container_width=True)
 
     # ── Sección 4: Scatterplots 2022 → 2025 ──────────────
     st.divider()
     st.subheader("Cambio individual 2022 → 2025")
-    st.caption("Puntos **sobre** la diagonal = mejoraron · **bajo** la diagonal = empeoraron · tamaño proporcional al cambio absoluto.")
+    st.caption("Puntos **sobre** la diagonal = aumentaron · **bajo** la diagonal = disminuyeron · tamaño proporcional al cambio absoluto.")
 
     def render_scatter(pct_col, n_col, n_min, xlab, ylab, titulo, lower_better=False):
         d = scatter_cambio(pct_col, n_col, n_min, xlab, ylab, titulo, "")
@@ -718,10 +740,12 @@ with tab3:
         st.plotly_chart(fig, use_container_width=True)
 
         # Para lower_better: mejoran los que más bajan (menor delta)
+        dir_nota = "bajar es positivo para esta métrica" if lower_better else "subir es positivo para esta métrica"
+        st.caption(f"ℹ️ {dir_nota.capitalize()}.")
         col_m, col_e = st.columns(2)
         with col_m:
-            st.markdown("🟢 **Mejoraron más**")
-            top = d.nsmallest(6, "delta") if lower_better else d.nlargest(6, "delta")
+            st.markdown("🔼 **Aumentaron más**")
+            top = d.nlargest(6, "delta")
             for _, r in top.iterrows():
                 st.caption(
                     f"**{r['nombre'][:46]}**  \n"
@@ -729,8 +753,8 @@ with tab3:
                     f"(**{r['delta']:+.1f} pp**)"
                 )
         with col_e:
-            st.markdown("🔴 **Empeoraron más**")
-            bot = d.nlargest(6, "delta") if lower_better else d.nsmallest(6, "delta")
+            st.markdown("🔽 **Disminuyeron más**")
+            bot = d.nsmallest(6, "delta")
             for _, r in bot.iterrows():
                 st.caption(
                     f"**{r['nombre'][:46]}**  \n"
@@ -764,7 +788,7 @@ with tab3:
                        "📄 SAIP: % respondidas en >20 días 2022 vs 2025",
                        lower_better=True)
     with sc5:
-        render_scatter("tram_fp_pct","tram_n", 50,
+        render_scatter("tram_fp_pct","tram_n", 0,
                        "% fuera de plazo 2022", "% fuera de plazo 2025",
                        "⏱️ Trámites: % fuera de plazo 2022 vs 2025",
                        lower_better=True)
@@ -784,12 +808,11 @@ with tab4:
     df_det = master[master["categoria"] == cat_det].copy()
 
     # KPIs de la categoría
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Instituciones en categoría", len(df_det))
     for col, label, n_col, n_min, dest in [
         ("rec_pct_2025",  "📋 Reclamos — % respondidos",  "rec_n_2025",  0, c2),
         ("saip_pct_2025", "📄 SAIP — % respondidas",      "saip_n_2025", 0, c3),
-        ("tram_fp_pct_2025", "⏱️ Trámites — % fuera de plazo", "tram_n_2025", 50, c4),
     ]:
         sub = df_det[df_det[n_col].fillna(0) > n_min][col].dropna()
         val = sub.mean() if len(sub) > 0 else None
@@ -799,7 +822,7 @@ with tab4:
     for col, label, n_col, n_min, dest in [
         ("rec_fp_pct_2025",  "📋 Reclamos — % resp. en >20 días",  "rec_n_2025",  0, fp1),
         ("saip_fp_pct_2025", "📄 SAIP — % resp. en >20 días",      "saip_n_2025", 0, fp2),
-        ("tram_fp_pct_2025", "⏱️ Trámites — % fuera de plazo",     "tram_n_2025", 50, fp3),
+        ("tram_fp_pct_2025", "⏱️ Trámites — % fuera de plazo",     "tram_n_2025", 0, fp3),
     ]:
         sub = df_det[df_det[n_col].fillna(0) > n_min][col].dropna()
         val = sub.mean() if len(sub) > 0 else None
@@ -855,29 +878,27 @@ with tab4:
 
         if lower_cat and suffix_cat == "d":
             colors_cat = [
-                C_GRAY if pd.isna(v) else C_OK if v <= 5 else C_WARN if v <= 15 else C_BAD
+                C_GRAY if pd.isna(v) else C_OK if v <= 20 else C_BAD
                 for v in df_cat_rank[val_col_cat]
             ]
             fmt_cat = lambda v: f"{v:.1f}d" if pd.notna(v) else "N/D"
             x_range_cat = [0, df_cat_rank[val_col_cat].max() * 1.2 if len(df_cat_rank) > 0 else 30]
             xaxis_cat = dict(range=x_range_cat, title=mod_cat)
-            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}d")]
+            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}d"), (20, C_BAD, "20d")]
         elif lower_cat and suffix_cat == "%":
             colors_cat = [
-                C_GRAY if pd.isna(v) else C_OK if v <= 5 else C_WARN if v <= 20 else C_BAD
+                C_GRAY if pd.isna(v) else C_OK if v <= 10 else C_BAD
                 for v in df_cat_rank[val_col_cat]
             ]
             fmt_cat = fmt
             x_range_cat = [0, min(100, df_cat_rank[val_col_cat].max() * 1.2 if len(df_cat_rank) > 0 else 50)]
             xaxis_cat = dict(range=x_range_cat, ticksuffix="%", title=mod_cat)
-            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}%"),
-                          (5, C_OK, "5%"), (20, C_WARN, "20%")]
+            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}%"), (10, C_BAD, "10%")]
         else:
             colors_cat = [sem_color(v) for v in df_cat_rank[val_col_cat]]
             fmt_cat = fmt
             xaxis_cat = dict(range=[0, 118], ticksuffix="%", title=mod_cat)
-            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}%"),
-                          (90, C_OK, "90%"), (70, C_WARN, "70%")]
+            vlines_cat = [(avg_cat, C_BLUE, f"Prom. {avg_cat:.1f}%"), (90, C_OK, "90%")]
 
         fig_cat_r = go.Figure(go.Bar(
             x=df_cat_rank[val_col_cat],
