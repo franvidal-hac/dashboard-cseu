@@ -30,7 +30,8 @@ Streamlit Community Cloud detecta el push y actualiza la app automáticamente en
 
 ```
 Dashboard Sistema CSEU/
-├── streamlit_app.py                               # App principal (único archivo Python)
+├── streamlit_app.py                               # Dashboard principal (benchmarking general)
+├── tramites_app.py                                # Dashboard de trámites (comparación + ficha por institución)
 ├── requirements.txt                               # Dependencias Python
 ├── CLAUDE.md                                      # Este archivo
 ├── app.R                                          # Dashboard anterior en R Shiny (no tocar)
