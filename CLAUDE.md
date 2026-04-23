@@ -13,13 +13,14 @@ Dashboard interactivo en **Streamlit (Python)** para el sistema CSEU (Calidad de
 
 ```bash
 cd "/Users/fran/Desktop/Dashboard Sistema CSEU"
-python3 -m streamlit run streamlit_app.py
+python3 -m streamlit run streamlit_app.py   # dashboard principal
+python3 -m streamlit run tramites_app.py    # dashboard de trámites (puerto 8502 si el principal ya está corriendo)
 ```
 
 ## Cómo publicar cambios
 
 ```bash
-git add streamlit_app.py
+git add streamlit_app.py tramites_app.py   # agregar los archivos modificados
 git commit -m "descripción del cambio"
 git push https://franvidal-hac:TOKEN@github.com/franvidal-hac/dashboard-cseu.git main
 ```
@@ -70,6 +71,7 @@ Dashboard Sistema CSEU/
 - **Sin score compuesto:** los tres módulos (reclamos, SAIP, trámites) se muestran siempre como columnas separadas. No se agrega en un único número.
 - **Tiempos (días promedio):** menor = mejor. Umbrales semáforo: ≤5d verde, ≤15d naranja, >15d rojo.
 - **Porcentajes (% respondidos, % en plazo):** mayor = mejor. Umbrales: ≥90% verde, ≥70% naranja, <70% rojo.
+- **% fuera de plazo en tramites_app.py:** menor = mejor. Umbrales: ≤10% verde, ≤30% naranja, >30% rojo.
 
 ## Arquitectura de streamlit_app.py
 
@@ -95,8 +97,31 @@ Dashboard Sistema CSEU/
 
 **Filtros globales:** `df` es el DataFrame filtrado por sidebar. Todos los tabs usan `df` excepto los selectores del sidebar (que usan `master` para listar todas las opciones).
 
+## Arquitectura de tramites_app.py
+
+```
+1. Configuración de página y CSS global
+2. Constantes: YEARS, colores, COLORES_CAT (por categoría), UMBRAL_FP_OK=10, UMBRAL_FP_WARN=30
+3. Funciones auxiliares: color_fp, color_fp_css, fmt_pct, fmt_n
+4. load_data() — @st.cache_data
+   ├── Lee maestro + tramites_consolidado_2025.xlsx
+   ├── Calcula fp_pct_{yr} por trámite (fuera/n * 100)
+   ├── tram_raw: una fila por trámite con métricas individuales por año
+   └── tram_inst: una fila por institución (promedio simple de fp_pct, suma de n)
+       → join con maestro (ministerio, categoría, etapa)
+5. Session state: inst_cod (None = comparación, str = ficha de institución)
+6. Sidebar: filtros ministerio + categoría + selector de año
+7. Router:
+   ├── Vista A (inst_cod=None): KPIs · Ranking interactivo · Scatter · Tabla comparativa
+   └── Vista B (inst_cod=str): Header · KPIs vs. promedio categoría · 3 tabs internos
+       ├── Tab 1: Tabla de trámites individuales
+       ├── Tab 2: Bar chart comparando trámites de la institución
+       └── Tab 3: Líneas de evolución 2022→2025 por trámite
+```
+
+**Navegación drill-down:** clic en barra del ranking → `on_select="rerun"` captura `customdata[0]` (cod) → guarda en `st.session_state.inst_cod` → rerenderiza en Vista B. Botón "← Volver" limpia `inst_cod`.
+
 ## Pendiente / próximas mejoras
 
 - Integrar `indicadores-proyectos-inversion-2025.xlsx` (metas de trámites de autorización de proyectos de inversión)
-- Vista de ficha individual por institución
 - Exportar tabla a Excel desde el dashboard
